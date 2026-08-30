@@ -27,18 +27,16 @@ sealed class SqliteBinary {
       return PrecompiledFromGithubAssets(type, urlPattern: pattern);
     }
 
-    List<String> resolvedPaths(String key) {
-      final List<String> entries =
-          (userDefines[key] as List?)?.cast() ?? const [];
-      if (userDefinesBase == null) return entries;
+    String resolvePath({required Uri base, required String path}) {
+      return p.isAbsolute(path) ? path : base.resolve(path).toFilePath();
+    }
 
-      return [
-        for (final entry in entries)
-          if (p.isAbsolute(entry))
-            entry
-          else
-            userDefinesBase.resolve(entry).toFilePath(),
-      ];
+    List<String> resolvedPaths(String key) {
+      final baseUri = userDefines.baseUri([key]);
+      final value = (userDefines[key] as List?)?.cast<String>() ?? const [];
+
+      if (baseUri == null) return value;
+      return [for (final path in value) resolvePath(base: baseUri, path: path)];
     }
 
     switch (userDefines['source']) {
@@ -67,13 +65,30 @@ sealed class SqliteBinary {
       case 'executable':
         return SimpleBinary.fromExecutable;
       case 'source':
+        final basePath = userDefines.baseUri(['path']);
+        final path = userDefines['path'];
+
+        if (basePath == null || path == null) {
+          throw ArgumentError('Using source: source requires a path key');
+        }
+
         return CompileSqlite(
-          sourceFile: userDefines.path('path')!.toFilePath(),
+          sourceFiles: switch (path) {
+            final String path => [resolvePath(base: basePath, path: path)],
+            final List<Object?> paths => [
+              for (final path in paths)
+                resolvePath(base: basePath, path: path as String),
+            ],
+            _ => throw ArgumentError.value(
+              path,
+              'path',
+              'Should be a string or a list of strings',
+            ),
+          },
           defines: CompilerDefines.parse(
             userDefines,
             input.config.code.targetOS,
           ),
-          additionalSources: resolvedPaths('additional_sources'),
           additionalIncludes: resolvedPaths('additional_includes'),
           additionalFlags:
               (userDefines['additional_flags'] as List?)?.cast() ?? const [],
@@ -294,6 +309,10 @@ final class PrecompiledFromGithubAssets extends PrecompiledBinary {
     HttpClientResponse response;
     try {
       final request = await client.getUrl(uri);
+      request.headers.add(
+        'User-Agent',
+        'github.com/simolus3/sqlite3.dart artifact downloader, version $releaseTag',
+      );
       response = await request.close();
     } catch (e, s) {
       // Improve error message by providing some context about why we download
@@ -344,8 +363,8 @@ final class PrecompiledForTesting extends PrecompiledBinary {
 }
 
 final class CompileSqlite implements SqliteBinary {
-  /// Path to the `sqlite3.c` source file to compile.
-  final String sourceFile;
+  /// Path to source files to compile (typically a single `sqlite3.c`).
+  final List<String> sourceFiles;
 
   /// User-defines for the SQLite compilation.
   final CompilerDefines defines;
@@ -365,7 +384,7 @@ final class CompileSqlite implements SqliteBinary {
   final List<String> additionalLibraries;
 
   CompileSqlite({
-    required this.sourceFile,
+    required this.sourceFiles,
     required this.defines,
     required this.additionalSources,
     required this.additionalIncludes,

@@ -2,6 +2,11 @@ name: Download and compile SQLite
 
 on:
   workflow_call:
+    inputs:
+      attest:
+        description: "Whether to generate a signed attestation for compiled artifacts"
+        type: boolean
+        default: false
     outputs:
       artifact_id:
         description: "ID of the artifact containing prebuilt SQLite libraries"
@@ -60,15 +65,16 @@ jobs:
         id: cache_build
         with:
           path: openssl-compiled
-          key: openssl-prebuilt-${{ runner.os }}-${{ hashFiles('tool/build_openssl.dart') }}
+          key: openssl-prebuilt-${{ runner.os }}-3.6.3-${{ hashFiles('tool/build_openssl.dart') }}
       - uses: dart-lang/setup-dart@v1
         if: steps.cache_build.outputs.cache-hit != 'true'
 
       - name: Download OpenSSL
         if: steps.cache_build.outputs.cache-hit != 'true'
+        # When updating this, also update the version in tool/generate_sbom.dart
         run: |
-          curl -L https://github.com/openssl/openssl/releases/download/openssl-3.6.2/openssl-3.6.2.tar.gz | tar --extract --gzip
-          mv openssl-3.6.2 openssl-src
+          curl -L https://github.com/openssl/openssl/releases/download/openssl-3.6.3/openssl-3.6.3.tar.gz | tar --extract --gzip
+          mv openssl-3.6.3 openssl-src
 
       - name: Install cross-compiling GCC
         shell: bash
@@ -453,3 +459,92 @@ jobs:
           path: sqlite3_connection_pool/lib/src/precompiled/
           if-no-files-found: error
           retention-days: 1
+
+  attest_binaries:
+    runs-on: ubuntu-latest
+    needs:
+      - build_sqlite
+      - compile_wasm
+      - compile_pool_linux_android
+      - compile_pool_apple
+      - compile_pool_windows
+    permissions:
+      attestations: write
+      id-token: write
+      artifact-metadata: write
+    name: Attest binaries
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: out/
+          merge-multiple: true
+          pattern: sqlite3-libs-*
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: sqlite3_connection_pool/lib/src/precompiled
+          merge-multiple: true
+          pattern: connection-pool-*
+
+      - run: ls -al out/
+      - run: ls -al sqlite3_connection_pool/lib/src/precompiled/
+
+      - uses: dart-lang/setup-dart@v1
+      - name: Generate SBOMs
+        run: |
+          dart pub get
+          dart tool/generate_sbom.dart out/ sqlite3_connection_pool/lib/src/precompiled/
+
+      - name: Upload sboms
+        uses: actions/upload-artifact@v7
+        with:
+          name: sboms
+          path: sbom
+
+      - name: Attest provenance
+        uses: actions/attest@v4
+        if: inputs.attest
+        with:
+          subject-path: |
+            out/*
+            sqlite3_connection_pool/lib/src/precompiled/*
+
+      - name: Attest plain SQLite build SBOM
+        uses: actions/attest@v4
+        if: inputs.attest
+        with:
+          sbom-path: sbom/sqlite3.bom.json
+          subject-path: |
+            out/libsqlite3.*
+            out/sqlite3.*
+
+      - name: Attest SQLite3 Multiple Ciphers build SBOM
+        uses: actions/attest@v4
+        if: inputs.attest
+        with:
+          sbom-path: sbom/sqlite3mc.bom.json
+          subject-path: |
+            out/libsqlite3mc.*
+            out/sqlite3mc.*
+
+      - name: Attest SQLCipher build SBOM
+        uses: actions/attest@v4
+        if: inputs.attest
+        with:
+          sbom-path: sbom/sqlcipher.bom.json
+          subject-path: |
+            out/libsqlcipher.*
+            out/sqlcipher.*
+
+      - name: Attest connection pools SBOM
+        uses: actions/attest@v4
+        if: inputs.attest
+        with:
+          sbom-path: sbom/connection_pool.bom.json
+          subject-path: |
+            sqlite3_connection_pool/lib/src/precompiled/*

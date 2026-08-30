@@ -1,6 +1,17 @@
-## 3.5.1-wip
+## 3.6.0 (unreleased)
 
-- Upgrade SQLite to 3.53.4 and SQLite3 Multiple Ciphers to 2.4.0.
+- Hooks: Support relative paths in `additional_includes` and `additional_lib_directories`.
+- Hooks: Support multiple source files to compile with `source: source`.
+
+## 3.5.2
+
+- Fix `WasmSqlite3.loadFromUrl` silently dropping request headers and a custom WASM loader.
+- Fix OPFS atomics VFS causing IO errors for files larger than 2GB.
+- Upgrade SQLCipher to 4.18.0.
+
+## 3.5.1
+
+- Upgrade SQLite to 3.53.4 and SQLite3 Multiple Ciphers to 2.5.0.
 
 ## 3.5.0
 

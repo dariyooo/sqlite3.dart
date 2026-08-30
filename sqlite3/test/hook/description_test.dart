@@ -47,7 +47,6 @@ void main() {
           defines: {
             'source': 'source',
             'path': 'native/sqlite3.c',
-            'additional_sources': ['native/extension.c'],
             'additional_includes': ['native/include', '/absolute/include'],
             'additional_lib_directories': ['native/lib'],
           },
@@ -58,9 +57,8 @@ void main() {
         return build(args, (input, outputs) async {
           final config = SqliteBinary.forBuild(input) as CompileSqlite;
 
-          expect(config.sourceFile, p.join(d.sandbox, 'native', 'sqlite3.c'));
-          expect(config.additionalSources, [
-            p.join(d.sandbox, 'native', 'extension.c'),
+          expect(config.sourceFiles, [
+            p.join(d.sandbox, 'native', 'sqlite3.c'),
           ]);
           expect(config.additionalIncludes, [
             p.join(d.sandbox, 'native', 'include'),
@@ -68,6 +66,39 @@ void main() {
           ]);
           expect(config.additionalLibraryDirectories, [
             p.join(d.sandbox, 'native', 'lib'),
+          ]);
+        });
+      },
+      check: (_, _) {},
+      extensions: [
+        CodeAssetExtension(
+          targetArchitecture: Architecture.arm64,
+          targetOS: OS.macOS,
+          linkModePreference: LinkModePreference.dynamic,
+          macOS: MacOSCodeConfig(targetVersion: 13),
+        ),
+      ],
+    );
+  });
+
+  test('multiple source files', () async {
+    await testBuildHook(
+      userDefines: PackageUserDefines(
+        workspacePubspec: PackageUserDefinesSource(
+          defines: {
+            'source': 'source',
+            'path': ['native/sqlite3.c', 'native/extra.c'],
+          },
+          basePath: Uri.file(p.join(d.sandbox, 'pubspec.yaml')),
+        ),
+      ),
+      mainMethod: (args) {
+        return build(args, (input, outputs) async {
+          final config = SqliteBinary.forBuild(input) as CompileSqlite;
+
+          expect(config.sourceFiles, [
+            p.join(d.sandbox, 'native', 'sqlite3.c'),
+            p.join(d.sandbox, 'native', 'extra.c'),
           ]);
         });
       },

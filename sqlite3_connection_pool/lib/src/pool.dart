@@ -164,14 +164,14 @@ final class SqliteConnectionPool {
     Future<void>? abortSignal,
   ) async {
     _checkNotClosed();
-    final (request, future) = writer ? _raw.requestWrite() : _raw.requestRead();
+    final (request, future) = _raw.requestSingleConnection(!writer);
     _installAbortSignal(request, abortSignal);
 
     final connectionPointer = await future;
     final lease = ConnectionLease._(
       PoolConnection.unsafeFromPointer(connectionPointer.connection),
       request,
-      true,
+      writer,
     );
     await lease._rollbackPendingTransaction();
     return lease;

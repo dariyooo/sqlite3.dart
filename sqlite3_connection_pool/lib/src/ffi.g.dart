@@ -29,6 +29,22 @@ external void pkg_sqlite3_connection_pool_close(
   ffi.Pointer<ConnectionPool> pool,
 );
 
+@ffi.Native<ffi.Void Function(ffi.Pointer<UninitializedPool>)>()
+external void pkg_sqlite3_connection_pool_close_uninitialized(
+  ffi.Pointer<UninitializedPool> uninitialized,
+);
+
+@ffi.Native<
+  ffi.Pointer<ConnectionPool> Function(
+    ffi.Pointer<UninitializedPool>,
+    ffi.Pointer<InitializedPool>,
+  )
+>()
+external ffi.Pointer<ConnectionPool> pkg_sqlite3_connection_pool_initialize(
+  ffi.Pointer<UninitializedPool> uninitialized,
+  ffi.Pointer<InitializedPool> pool,
+);
+
 @ffi.Native<ffi.Void Function(ffi.Pointer<PoolRequest>)>()
 external void pkg_sqlite3_connection_pool_notify_updates(
   ffi.Pointer<PoolRequest> request,
@@ -65,39 +81,29 @@ external ffi.Pointer<PoolRequest> pkg_sqlite3_connection_pool_obtain_exclusive(
     ffi.Pointer<ConnectionPool>,
     ffi.Int64,
     ffi.Int64,
+    ffi.Char,
   )
 >(isLeaf: true)
-external ffi.Pointer<PoolRequest> pkg_sqlite3_connection_pool_obtain_read(
+external ffi.Pointer<PoolRequest> pkg_sqlite3_connection_pool_obtain_single(
   ffi.Pointer<ConnectionPool> pool,
   int tag,
   int port,
+  int read,
 );
 
 @ffi.Native<
-  ffi.Pointer<PoolRequest> Function(
-    ffi.Pointer<ConnectionPool>,
-    ffi.Int64,
-    ffi.Int64,
-  )
->(isLeaf: true)
-external ffi.Pointer<PoolRequest> pkg_sqlite3_connection_pool_obtain_write(
-  ffi.Pointer<ConnectionPool> pool,
-  int tag,
-  int port,
-);
-
-@ffi.Native<
-  ffi.Pointer<ConnectionPool> Function(
+  ffi.Void Function(
     ffi.Pointer<ffi.Uint8>,
     ffi.UintPtr,
-    ffi.Pointer<ffi.NativeFunction<ffi.Pointer<InitializedPool> Function()>>,
+    ffi.Pointer<ffi.Pointer<UninitializedPool>>,
+    ffi.Pointer<ffi.Pointer<ConnectionPool>>,
   )
 >()
-external ffi.Pointer<ConnectionPool> pkg_sqlite3_connection_pool_open(
+external void pkg_sqlite3_connection_pool_open(
   ffi.Pointer<ffi.Uint8> name,
   int name_len,
-  ffi.Pointer<ffi.NativeFunction<ffi.Pointer<InitializedPool> Function()>>
-  initialize,
+  ffi.Pointer<ffi.Pointer<UninitializedPool>> initializer,
+  ffi.Pointer<ffi.Pointer<ConnectionPool>> pool,
 );
 
 @ffi.Native<
@@ -174,6 +180,12 @@ class _SymbolAddresses {
   >
   get pkg_sqlite3_connection_pool_close =>
       ffi.Native.addressOf(self.pkg_sqlite3_connection_pool_close);
+  ffi.Pointer<
+    ffi.NativeFunction<ffi.Void Function(ffi.Pointer<UninitializedPool>)>
+  >
+  get pkg_sqlite3_connection_pool_close_uninitialized => ffi.Native.addressOf(
+    self.pkg_sqlite3_connection_pool_close_uninitialized,
+  );
   ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<PoolRequest>)>>
   get pkg_sqlite3_connection_pool_request_close =>
       ffi.Native.addressOf(self.pkg_sqlite3_connection_pool_request_close);
@@ -320,3 +332,5 @@ final class PoolConnection extends ffi.Struct {
 }
 
 final class PoolRequest extends ffi.Opaque {}
+
+final class UninitializedPool extends ffi.Opaque {}
